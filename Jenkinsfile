@@ -1,9 +1,8 @@
 pipeline {
     agent any
-
+    
     stages {
         /*
-
         stage('Build') {
             agent {
                 docker {
@@ -23,7 +22,7 @@ pipeline {
             }
         }
         */
-
+        
         stage('Tests') {
             parallel {
                 stage('Unit tests') {
@@ -33,20 +32,28 @@ pipeline {
                             reuseNode true
                         }
                     }
-
+                    
                     steps {
                         sh '''
                             #test -f build/index.html
-                            npm test
+                            
+                            # Vérifier l'existence du répertoire pour les rapports
+                            mkdir -p jest-results
+                            
+                            # Exécuter Jest avec l'option de reporter JUnit
+                            npm test -- --reporters=default --reporters=jest-junit
                         '''
                     }
+                    
                     post {
                         always {
-                            junit 'jest-results/junit.xml'
+                            // Vérifier si les fichiers existent avant de les traiter
+                            sh 'ls -la jest-results || echo "Le répertoire jest-results est vide ou n\'existe pas"'
+                            junit allowEmptyResults: true, testResults: 'jest-results/junit.xml'
                         }
                     }
                 }
-
+                
                 stage('E2E') {
                     agent {
                         docker {
@@ -54,16 +61,16 @@ pipeline {
                             reuseNode true
                         }
                     }
-
+                    
                     steps {
                         sh '''
                             npm install serve
                             node_modules/.bin/serve -s build &
                             sleep 15
-                            npx playwright test  --reporter=html
+                            npx playwright test --reporter=html
                         '''
                     }
-
+                    
                     post {
                         always {
                             publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright HTML Report', reportTitles: '', useWrapperFileDirectly: true])
